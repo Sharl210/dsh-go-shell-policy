@@ -1,18 +1,12 @@
-# DSH Go Shell 确认策略模块
+# DSH Go Shell 始终允许模块
 
 独立的 LSPosed 模块 App，目标包名为 `io.github.ccch1mneyyy.dsh_app`。不替换目标 APK，不改目标 App 的 Flutter 页面、设置文件或 DSH 核心文件。
 
-## 策略
+## 行为
 
-在模块 App 内选择：
+模块没有设置入口，也没有跨进程配置读取。Hook 成功定位当前 DSH Go Shell 执行入口后，固定返回 `ALLOW_ONCE`，因此每条满足原始后端/UID 校验的 Android Shell 命令都会直接放行，不再显示确认卡。
 
-- **每次都询问**：保留 DSH Go 的原始命令确认。
-- **始终允许**：自动允许 Android Shell 命令，不显示该命令的确认卡。
-- **仅危险命令询问**：递归删除、分区/刷写、重启、应用数据清理、权限授予、关键路径写入等命令保留原确认；普通查询直接通过。脚本执行、动态展开和无法明确解析的间接执行也会询问。
-
-新安装的默认值是“每次都询问”。策略保存到模块私有数据，通过只读 ContentProvider 供目标 App 查询。Provider 只接受模块自身及目标包 UID 的读取，拒绝外部写入。切换策略后下一次命令读取新值；已经显示的确认卡不被追认或自动点击。
-
-危险判定是有明确定义的本地规则集合，不是完整 shell 解释器，也不声称识别所有脚本或工具可能造成的副作用。
+模块不启动 Shizuku，不改变 DSH Go 的连接、超时、取消、启用状态或后端 UID 校验。DexKit 无法唯一定位时保留 DSH Go 原始确认路径。
 
 ## 构建
 
@@ -39,10 +33,9 @@
 1. 安装构建出的模块 APK。
 2. 在 LSPosed 中启用模块，作用域仅选择 **DSH Go**；此步骤由用户操作，不修改 LSPosed 数据库。
 3. 用户结束并重新打开 DSH Go 进程，使新模块加载。无需重启手机。
-4. 打开模块自己的 App，选择策略。
-5. 在 DSH Go 原有 Android Shell 后端已由用户连接的前提下验证命令确认。模块不会替用户启动或授权 Shizuku。
+4. 在 DSH Go 原有 Android Shell 后端已由用户连接的前提下验证命令确认。模块不会替用户启动或授权 Shizuku。
 
-停用时在模块 App 选择“每次都询问”。完全移除 hook 时由用户在 LSPosed 禁用模块，再重新打开 DSH Go。
+停用时由用户在 LSPosed 禁用模块，再重新打开 DSH Go。
 
 ## 匹配设计
 
@@ -61,7 +54,7 @@ DexKit 每次从当前 APK 解析，不保存混淆类名：
 
 ## 验证
 
-`DangerCommandsTest` 使用命令字符串测试普通查询、危险命令、引用/转义、连接命令及动态脚本；不执行测试字符串中的命令。`PolicyLogicTest` 覆盖三档策略、未知模式和后端 UID 白名单。
+`PolicyLogicTest` 覆盖 ADB/Shizuku 后端 UID 白名单。固定放行路径的设备行为仍需在 LSPosed 作用域已由用户配置的 DSH Go 进程中实测。
 
 LSPosed 日志标签：`DSHGoShellPolicy`。
 
@@ -71,6 +64,6 @@ LSPosed 日志标签：`DSHGoShellPolicy`。
 - `decision_auto_allow`：代理在认可的后端/UID 下返回了允许决定。
 - 最终是否执行以 DSH Go 返回的 `started/exitCode/errorCode` 为准。
 
-实际设备验收至少需要：默认逐条询问；始终允许下连续两条查询不询问；危险档查询不询问、危险命令出现原确认并拒绝后不执行；切回每次询问立即恢复；取消/断开连接仍遵循原行为。危险命令验证只检查出现确认并拒绝，不实际执行破坏性操作。
+实际设备验收至少需要：普通 Android Shell 查询不再出现确认卡；命令仍受 DSH Go 原有连接、启用状态、后端 UID、超时和取消逻辑约束；取消/断开连接仍遵循原行为。
 
 如果 LSPosed 日志出现 `couldn't find libdexkit.so`，新版本会先尝试类加载器路径，失败后从模块 APK 当前 ABI 的 `lib/<abi>/libdexkit.so` 解压到 DSH Go 的 `code_cache/dshgo-shellpol/`，再用绝对路径加载；不会修改 DSH Go APK 或系统库。日志中的 `native_loaded=absolute` 表示这条路径生效。

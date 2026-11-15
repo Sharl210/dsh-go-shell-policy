@@ -1,14 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.dshgo.shellpol"
-    android:versionCode="1"
-    android:versionName="1.0">
+    package="com.dshgo.shellpol">
 
-    <queries>
-        <package android:name="io.github.ccch1mneyyy.dsh_app" />
-    </queries>
     <application
-        android:label="Shell 确认策略"
+        android:label="Shell 始终允许"
         android:allowBackup="false"
         android:supportsRtl="true">
 
@@ -17,31 +12,12 @@
             android:value="true" />
         <meta-data
             android:name="xposeddescription"
-            android:value="让 DSH Go 的 Android Shell 命令确认可选：始终询问 / 始终允许 / 仅危险命令询问" />
+            android:value="让 DSH Go 的 Android Shell 命令直接放行，不再逐条弹出确认" />
         <meta-data
             android:name="xposedminversion"
             android:value="82" />
         <meta-data
-            android:name="xposedsharedprefs"
-            android:value="true" />
-        <meta-data
             android:name="xposedscope"
             android:resource="@array/xposed_scope" />
-
-        <provider
-            android:name=".PolicyProvider"
-            android:authorities="com.dshgo.shellpol.policy"
-            android:exported="true"
-            android:grantUriPermissions="false" />
-        <activity
-            android:name=".SettingsActivity"
-            android:label="Shell 确认策略"
-            android:exported="true"
-            android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
     </application>
 </manifest>

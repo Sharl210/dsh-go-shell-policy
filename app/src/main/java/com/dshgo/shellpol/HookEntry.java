@@ -1,9 +1,6 @@
 package com.dshgo.shellpol;
 
-import android.content.Context;
 import android.content.pm.ApplicationInfo;
-import android.net.Uri;
-import android.os.Bundle;
 import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XposedBridge;
@@ -31,9 +28,6 @@ public final class HookEntry implements IXposedHookLoadPackage, IXposedHookZygot
     public static final String TAG = "DSHGoShellPolicy";
     public static final String TARGET_PKG = "io.github.ccch1mneyyy.dsh_app";
     public static final String MODULE_PKG = "com.dshgo.shellpol";
-    public static final String POLICY_URI = "content://com.dshgo.shellpol.policy";
-    public static final String KEY_MODE = "mode";
-    public static final int MODE_ASK = 0, MODE_ALLOW = 1, MODE_DANGER = 2;
 
     @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lp) {
         if (!TARGET_PKG.equals(lp.packageName)) return;
@@ -146,72 +140,5 @@ public final class HookEntry implements IXposedHookLoadPackage, IXposedHookZygot
         List<String> p = m.getParamTypeNames();
         return p.size() == 5 && "long".equals(p.get(0)) && "java.lang.String".equals(p.get(1))
             && "long".equals(p.get(2)) && "java.util.Map".equals(m.getReturnTypeName());
-    }
-
-    static int readMode(Context context) {
-        Integer direct = readModeFromPreferences();
-        if (direct != null) {
-            XposedBridge.log(TAG + ": config_route=preferences mode=" + direct);
-            return direct;
-        }
-        if (context == null) {
-            XposedBridge.log(TAG + ": config unavailable: no preferences and target Context not resolved");
-            return MODE_ASK;
-        }
-        try {
-            android.database.Cursor cursor = context.getContentResolver().query(
-                    Uri.parse(POLICY_URI + "/mode"), new String[]{"mode"}, null, null, null);
-            if (cursor == null) {
-                XposedBridge.log(TAG + ": config unavailable: Provider returned null cursor; uid="
-                        + android.os.Process.myUid());
-                return MODE_ASK;
-            }
-            try {
-                if (!cursor.moveToFirst()) {
-                    XposedBridge.log(TAG + ": config unavailable: Provider returned no rows");
-                    return MODE_ASK;
-                }
-                int mode = cursor.getInt(cursor.getColumnIndexOrThrow("mode"));
-                int resolved = mode == MODE_ALLOW || mode == MODE_DANGER ? mode : MODE_ASK;
-                XposedBridge.log(TAG + ": config_route=provider mode=" + resolved);
-                return resolved;
-            } finally { cursor.close(); }
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + ": config unavailable; ask retained; uid="
-                    + android.os.Process.myUid() + " context=" + context.getPackageName()
-                    + " uri=" + POLICY_URI + "/mode");
-            XposedBridge.log(t);
-            return MODE_ASK;
-        }
-    }
-
-    /** Reads the module's own preference file directly, so a stopped or unroutable Provider cannot block policy. */
-    private static Integer readModeFromPreferences() {
-        try {
-            de.robv.android.xposed.XSharedPreferences prefs =
-                    new de.robv.android.xposed.XSharedPreferences(MODULE_PKG, "dshgo_shell_policy");
-            prefs.reload();
-            int mode = prefs.getInt(KEY_MODE, -1);
-            if (mode == MODE_ALLOW || mode == MODE_DANGER) return mode;
-            if (mode != MODE_ASK) return null;
-            return MODE_ASK;
-        } catch (Throwable t) {
-            XposedBridge.log(TAG + ": preferences route failed: " + t);
-            return null;
-        }
-    }
-
-    static Context findTargetContext(Object controller) {
-        for (Class<?> c = controller.getClass(); c != null; c = c.getSuperclass()) {
-            for (Field f : c.getDeclaredFields()) {
-                if (!Context.class.isAssignableFrom(f.getType()) || java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
-                try {
-                    f.setAccessible(true);
-                    Context ctx = (Context)f.get(controller);
-                    if (ctx != null && TARGET_PKG.equals(ctx.getPackageName())) return ctx;
-                } catch (Throwable ignored) { }
-            }
-        }
-        return null;
     }
 }

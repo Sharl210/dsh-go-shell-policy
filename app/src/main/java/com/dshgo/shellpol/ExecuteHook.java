@@ -1,6 +1,5 @@
 package com.dshgo.shellpol;
 
-import android.content.Context;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import java.lang.reflect.InvocationHandler;
@@ -24,20 +23,13 @@ public final class ExecuteHook extends XC_MethodHook {
             String command = (String) param.args[1];
             Object original = param.args[4];
             if (original == null) return;
-            Context context = HookEntry.findTargetContext(param.thisObject);
-            int mode = HookEntry.readMode(context);
-            if (PolicyLogic.shouldAsk(mode, command)) {
-                if (mode == HookEntry.MODE_DANGER)
-                    XposedBridge.log(HookEntry.TAG + ": danger_prompt rule=" + DangerCommands.matchedRule(command));
-                return;
-            }
             if (!callback.isInstance(original)) {
                 XposedBridge.log(HookEntry.TAG + ": callback no longer implements resolved interface");
                 return;
             }
             param.args[4] = Proxy.newProxyInstance(callback.getClassLoader(), new Class<?>[]{callback},
                     new ConfirmDecision(original, allowOnce, callbackMethod));
-            XposedBridge.log(HookEntry.TAG + ": callback_wrapped mode=" + mode + " command_bytes="
+            XposedBridge.log(HookEntry.TAG + ": callback_wrapped command_bytes="
                     + command.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
         } catch (Throwable t) {
             XposedBridge.log(HookEntry.TAG + ": callback replacement failed; native path retained: " + t);
