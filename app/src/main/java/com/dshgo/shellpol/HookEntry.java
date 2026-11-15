@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.net.Uri;
 import android.os.Bundle;
+import de.robv.android.xposed.IXposedHookZygoteInit;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
@@ -24,7 +25,9 @@ import java.util.*;
 import java.util.zip.ZipFile;
 
 /** Resolve current-APK semantic anchors, never persisted obfuscated symbols. */
-public final class HookEntry implements IXposedHookLoadPackage {
+public final class HookEntry implements IXposedHookLoadPackage, IXposedHookZygoteInit {
+    private static String moduleApk;
+    @Override public void initZygote(StartupParam param) { moduleApk = param.modulePath; }
     public static final String TAG = "DSHGoShellPolicy";
     public static final String TARGET_PKG = "io.github.ccch1mneyyy.dsh_app";
     public static final String MODULE_PKG = "com.dshgo.shellpol";
@@ -128,41 +131,15 @@ public final class HookEntry implements IXposedHookLoadPackage {
     }
 
     private static void ensureDexKitNative(XC_LoadPackage.LoadPackageParam lp) throws Exception {
-        try {
-            System.loadLibrary("dexkit");
-            XposedBridge.log(TAG + ": native_loaded=classloader");
-            return;
-        } catch (UnsatisfiedLinkError first) {
-            XposedBridge.log(TAG + ": classloader_native_missing, extracting absolute library");
+        String apk = moduleApk;
+        if (apk == null) {
+            ClassLoader cl = HookEntry.class.getClassLoader();
+            try { apk = (String) XposedHelpers.getObjectField(cl, "module"); }
+            catch (Throwable ignored) { }
         }
-        Object thread = XposedHelpers.callStaticMethod(
-                Class.forName("android.app.ActivityThread"), "currentActivityThread");
-        if (thread == null) throw new IllegalStateException("ActivityThread unavailable");
-        Context system = (Context) XposedHelpers.callMethod(thread, "getSystemContext");
-        ApplicationInfo module = system.getPackageManager().getApplicationInfo(MODULE_PKG, 0);
-        String abi = android.os.Build.SUPPORTED_ABIS[0];
-        String entry = "lib/" + abi + "/libdexkit.so";
-        File dir = new File(lp.appInfo.dataDir, "code_cache/dshgo-shellpol");
-        if (!dir.exists() && !dir.mkdirs() && !dir.isDirectory())
-            throw new IllegalStateException("native cache unavailable: " + dir);
-        File target = new File(dir, "libdexkit.so");
-        File temp = new File(dir, "libdexkit.so.tmp");
-        try (ZipFile zip = new ZipFile(module.sourceDir);
-             java.io.InputStream input = zip.getInputStream(zip.getEntry(entry));
-             FileOutputStream output = new FileOutputStream(temp)) {
-            byte[] buffer = new byte[32768];
-            int n;
-            while ((n = input.read(buffer)) != -1) output.write(buffer, 0, n);
-            output.getFD().sync();
-        }
-        if (!temp.renameTo(target)) {
-            if (target.exists() && !target.delete()) throw new IllegalStateException("native replacement failed");
-            if (!temp.renameTo(target)) throw new IllegalStateException("native rename failed");
-        }
-        target.setReadable(true, false);
-        target.setExecutable(true, false);
-        System.load(target.getAbsolutePath());
-        XposedBridge.log(TAG + ": native_loaded=absolute path=" + target.getAbsolutePath());
+        if (apk == null || !new File(apk).isFile()) throw new IllegalStateException("Module APK path unavailable");
+        String route = NativeLibrary.load(apk, new File(lp.appInfo.dataDir, "code_cache/dshgo-shellpol"), null);
+        XposedBridge.log(TAG + ": native_loaded=" + route);
     }
 
     private static boolean executeShape(MethodData m) {
