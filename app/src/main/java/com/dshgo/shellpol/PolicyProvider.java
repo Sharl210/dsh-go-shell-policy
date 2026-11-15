@@ -36,8 +36,6 @@ public final class PolicyProvider extends ContentProvider {
         return false;
     }
 
-    @Override public Bundle call(String method, String arg, Bundle extras) { return null; }
-
     @Override public String getType(Uri uri) { return "vnd.android.cursor.item/vnd.dshgo.shell-policy"; }
     @Override public Uri insert(Uri uri, ContentValues values) { throw new UnsupportedOperationException("read only"); }
     @Override public int delete(Uri uri, String selection, String[] args) { throw new UnsupportedOperationException("read only"); }
