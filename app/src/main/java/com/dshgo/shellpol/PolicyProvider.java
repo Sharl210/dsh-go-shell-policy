@@ -6,8 +6,8 @@ import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
 import android.os.Binder;
+import android.os.Bundle;
 import android.os.Process;
-import java.util.Collections;
 
 /** Read-only policy bridge; only the target package UID and module UID may read the mode. */
 public final class PolicyProvider extends ContentProvider {
@@ -36,7 +36,8 @@ public final class PolicyProvider extends ContentProvider {
         return false;
     }
 
-    @Override public Cursor query(Uri uri, String[] projection, String selection, String[] args, String sortOrder) { return null; }
+    @Override public Bundle call(String method, String arg, Bundle extras) { return null; }
+
     @Override public String getType(Uri uri) { return "vnd.android.cursor.item/vnd.dshgo.shell-policy"; }
     @Override public Uri insert(Uri uri, ContentValues values) { throw new UnsupportedOperationException("read only"); }
     @Override public int delete(Uri uri, String selection, String[] args) { throw new UnsupportedOperationException("read only"); }
