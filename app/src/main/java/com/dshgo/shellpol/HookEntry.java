@@ -151,10 +151,14 @@ public final class HookEntry implements IXposedHookLoadPackage, IXposedHookZygot
     static int readMode(Context context) {
         if (context == null) return MODE_ASK;
         try {
-            Bundle b = context.getContentResolver().call(Uri.parse(POLICY_URI), "readPolicy", null, null);
-            if (b == null) return MODE_ASK;
-            int mode = b.getInt("mode", MODE_ASK);
-            return mode == MODE_ALLOW || mode == MODE_DANGER ? mode : MODE_ASK;
+            android.database.Cursor cursor = context.getContentResolver().query(
+                    Uri.parse(POLICY_URI + "/mode"), new String[]{"mode"}, null, null, null);
+            if (cursor == null) return MODE_ASK;
+            try {
+                if (!cursor.moveToFirst()) return MODE_ASK;
+                int mode = cursor.getInt(cursor.getColumnIndexOrThrow("mode"));
+                return mode == MODE_ALLOW || mode == MODE_DANGER ? mode : MODE_ASK;
+            } finally { cursor.close(); }
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": config unavailable; ask retained: " + t.getClass().getSimpleName());
             return MODE_ASK;

@@ -3,24 +3,29 @@ package com.dshgo.shellpol;
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.database.Cursor;
+import android.database.MatrixCursor;
 import android.net.Uri;
 import android.os.Binder;
-import android.os.Bundle;
 import android.os.Process;
+import java.util.Collections;
 
 /** Read-only policy bridge; only the target package UID and module UID may read the mode. */
 public final class PolicyProvider extends ContentProvider {
     @Override public boolean onCreate() { return true; }
 
-    @Override public Bundle call(String method, String arg, Bundle extras) {
-        if (!"readPolicy".equals(method) || getContext() == null) return null;
-        int uid = Binder.getCallingUid();
-        if (uid != Process.myUid() && !isTargetUid(uid)) return null;
-        int mode = getContext().getSharedPreferences("dshgo_shell_policy", 0).getInt("mode", 0);
-        Bundle result = new Bundle();
-        result.putInt("mode", mode);
-        return result;
+    @Override public Cursor query(Uri uri, String[] projection, String selection, String[] args, String sortOrder) {
+        if (getContext() == null || !authorizedCaller()) return null;
+        MatrixCursor cursor = new MatrixCursor(new String[]{"mode"});
+        cursor.addRow(new Object[]{getContext().getSharedPreferences("dshgo_shell_policy", 0).getInt("mode", 0)});
+        return cursor;
     }
+
+    private boolean authorizedCaller() {
+        int uid = Binder.getCallingUid();
+        return uid == Process.myUid() || isTargetUid(uid);
+    }
+
+    @Override public Bundle call(String method, String arg, Bundle extras) { return null; }
 
     private boolean isTargetUid(int uid) {
         try {

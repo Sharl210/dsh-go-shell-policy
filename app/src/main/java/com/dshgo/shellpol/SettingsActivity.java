@@ -149,9 +149,11 @@ public class SettingsActivity extends Activity {
             boolean verified = false;
             if (saved) {
                 try {
-                    Bundle result = getContentResolver().call(android.net.Uri.parse(HookEntry.POLICY_URI),
-                            "readPolicy", null, null);
-                    verified = result != null && result.getInt("mode", -1) == value;
+                    android.database.Cursor cursor = getContentResolver().query(
+                            android.net.Uri.parse(HookEntry.POLICY_URI + "/mode"), new String[]{"mode"}, null, null, null);
+                    if (cursor != null) try {
+                        verified = cursor.moveToFirst() && cursor.getInt(cursor.getColumnIndexOrThrow("mode")) == value;
+                    } finally { cursor.close(); }
                 } catch (Exception ignored) { }
             }
             android.widget.Toast.makeText(this,
