@@ -73,6 +73,4 @@ LSPosed 日志标签：`DSHGoShellPolicy`。
 
 实际设备验收至少需要：默认逐条询问；始终允许下连续两条查询不询问；危险档查询不询问、危险命令出现原确认并拒绝后不执行；切回每次询问立即恢复；取消/断开连接仍遵循原行为。危险命令验证只检查出现确认并拒绝，不实际执行破坏性操作。
 
-## 验证状态
-
-源码经过独立只读审查，实际编译及单元测试结果以仓库 Actions 对应提交的运行记录为准。构建成功不等于目标 App 内的 hook 效果已经验证；真实三档行为和跨版本兼容性需要单独验证。
+如果 LSPosed 日志出现 `couldn't find libdexkit.so`，新版本会先尝试类加载器路径，失败后从模块 APK 当前 ABI 的 `lib/<abi>/libdexkit.so` 解压到 DSH Go 的 `code_cache/dshgo-shellpol/`，再用绝对路径加载；不会修改 DSH Go APK 或系统库。日志中的 `native_loaded=absolute` 表示这条路径生效。

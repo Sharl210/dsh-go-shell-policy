@@ -1,10 +1,12 @@
 package com.dshgo.shellpol;
 
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XposedBridge;
+import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 import org.luckypray.dexkit.DexKitBridge;
 import org.luckypray.dexkit.query.FindClass;
@@ -14,9 +16,12 @@ import org.luckypray.dexkit.query.matchers.ClassMatcher;
 import org.luckypray.dexkit.query.matchers.MethodMatcher;
 import org.luckypray.dexkit.result.ClassData;
 import org.luckypray.dexkit.result.MethodData;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
+import java.util.zip.ZipFile;
 
 /** Resolve current-APK semantic anchors, never persisted obfuscated symbols. */
 public final class HookEntry implements IXposedHookLoadPackage {
@@ -30,7 +35,7 @@ public final class HookEntry implements IXposedHookLoadPackage {
     @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lp) {
         if (!TARGET_PKG.equals(lp.packageName)) return;
         try {
-            System.loadLibrary("dexkit");
+            ensureDexKitNative(lp);
             try (DexKitBridge bridge = DexKitBridge.create(lp.appInfo.sourceDir)) {
                 // R8 may inline confirmationError into execute, or leave it as a callee.
                 List<MethodData> gates = bridge.findMethod(new FindMethod().matcher(
@@ -120,6 +125,44 @@ public final class HookEntry implements IXposedHookLoadPackage {
                     tryAddDecision(out, mapped.getField().getType(), loader);
             }
         }
+    }
+
+    private static void ensureDexKitNative(XC_LoadPackage.LoadPackageParam lp) throws Exception {
+        try {
+            System.loadLibrary("dexkit");
+            XposedBridge.log(TAG + ": native_loaded=classloader");
+            return;
+        } catch (UnsatisfiedLinkError first) {
+            XposedBridge.log(TAG + ": classloader_native_missing, extracting absolute library");
+        }
+        Object thread = XposedHelpers.callStaticMethod(
+                Class.forName("android.app.ActivityThread"), "currentActivityThread");
+        if (thread == null) throw new IllegalStateException("ActivityThread unavailable");
+        Context system = (Context) XposedHelpers.callMethod(thread, "getSystemContext");
+        ApplicationInfo module = system.getPackageManager().getApplicationInfo(MODULE_PKG, 0);
+        String abi = android.os.Build.SUPPORTED_ABIS[0];
+        String entry = "lib/" + abi + "/libdexkit.so";
+        File dir = new File(lp.appInfo.dataDir, "code_cache/dshgo-shellpol");
+        if (!dir.exists() && !dir.mkdirs() && !dir.isDirectory())
+            throw new IllegalStateException("native cache unavailable: " + dir);
+        File target = new File(dir, "libdexkit.so");
+        File temp = new File(dir, "libdexkit.so.tmp");
+        try (ZipFile zip = new ZipFile(module.sourceDir);
+             java.io.InputStream input = zip.getInputStream(zip.getEntry(entry));
+             FileOutputStream output = new FileOutputStream(temp)) {
+            byte[] buffer = new byte[32768];
+            int n;
+            while ((n = input.read(buffer)) != -1) output.write(buffer, 0, n);
+            output.getFD().sync();
+        }
+        if (!temp.renameTo(target)) {
+            if (target.exists() && !target.delete()) throw new IllegalStateException("native replacement failed");
+            if (!temp.renameTo(target)) throw new IllegalStateException("native rename failed");
+        }
+        target.setReadable(true, false);
+        target.setExecutable(true, false);
+        System.load(target.getAbsolutePath());
+        XposedBridge.log(TAG + ": native_loaded=absolute path=" + target.getAbsolutePath());
     }
 
     private static boolean executeShape(MethodData m) {
