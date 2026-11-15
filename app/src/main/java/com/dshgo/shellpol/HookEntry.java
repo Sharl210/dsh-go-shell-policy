@@ -149,19 +149,55 @@ public final class HookEntry implements IXposedHookLoadPackage, IXposedHookZygot
     }
 
     static int readMode(Context context) {
-        if (context == null) return MODE_ASK;
+        Integer direct = readModeFromPreferences();
+        if (direct != null) {
+            XposedBridge.log(TAG + ": config_route=preferences mode=" + direct);
+            return direct;
+        }
+        if (context == null) {
+            XposedBridge.log(TAG + ": config unavailable: no preferences and target Context not resolved");
+            return MODE_ASK;
+        }
         try {
             android.database.Cursor cursor = context.getContentResolver().query(
                     Uri.parse(POLICY_URI + "/mode"), new String[]{"mode"}, null, null, null);
-            if (cursor == null) return MODE_ASK;
+            if (cursor == null) {
+                XposedBridge.log(TAG + ": config unavailable: Provider returned null cursor; uid="
+                        + android.os.Process.myUid());
+                return MODE_ASK;
+            }
             try {
-                if (!cursor.moveToFirst()) return MODE_ASK;
+                if (!cursor.moveToFirst()) {
+                    XposedBridge.log(TAG + ": config unavailable: Provider returned no rows");
+                    return MODE_ASK;
+                }
                 int mode = cursor.getInt(cursor.getColumnIndexOrThrow("mode"));
-                return mode == MODE_ALLOW || mode == MODE_DANGER ? mode : MODE_ASK;
+                int resolved = mode == MODE_ALLOW || mode == MODE_DANGER ? mode : MODE_ASK;
+                XposedBridge.log(TAG + ": config_route=provider mode=" + resolved);
+                return resolved;
             } finally { cursor.close(); }
         } catch (Throwable t) {
-            XposedBridge.log(TAG + ": config unavailable; ask retained: " + t.getClass().getSimpleName());
+            XposedBridge.log(TAG + ": config unavailable; ask retained; uid="
+                    + android.os.Process.myUid() + " context=" + context.getPackageName()
+                    + " uri=" + POLICY_URI + "/mode");
+            XposedBridge.log(t);
             return MODE_ASK;
+        }
+    }
+
+    /** Reads the module's own preference file directly, so a stopped or unroutable Provider cannot block policy. */
+    private static Integer readModeFromPreferences() {
+        try {
+            de.robv.android.xposed.XSharedPreferences prefs =
+                    new de.robv.android.xposed.XSharedPreferences(MODULE_PKG, "dshgo_shell_policy");
+            prefs.reload();
+            int mode = prefs.getInt(KEY_MODE, -1);
+            if (mode == MODE_ALLOW || mode == MODE_DANGER) return mode;
+            if (mode != MODE_ASK) return null;
+            return MODE_ASK;
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": preferences route failed: " + t);
+            return null;
         }
     }
 
