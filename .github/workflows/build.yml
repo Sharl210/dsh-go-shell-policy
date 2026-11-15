@@ -21,8 +21,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.1.1'
-      - name: Install SDK platform
-        run: sdkmanager 'platforms;android-33' 'build-tools;33.0.2'
+      - name: Locate and install SDK platform
+        run: |
+          test -n "$ANDROID_HOME"
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -maxdepth 4 -type f -name sdkmanager -print -quit)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" 'platforms;android-33' 'build-tools;33.0.2' || [ "$?" -eq 141 ]
       - name: Test and build
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
       - name: Inspect and stage APK
